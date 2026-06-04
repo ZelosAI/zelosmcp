@@ -223,7 +223,11 @@ class TestRenderComprehensiveRule:
             access="read-write",
         )
         assert "Access mode: READ-WRITE" in out
-        assert "Confirm with the user" in out
+        # The read-write directive (configs/assets/global.yaml) tells the
+        # agent to confirm before destructive tools rather than confirm
+        # every write. Assert the confirmation directive is present.
+        assert "Confirm before any" in out
+        assert "`[destructive]`" in out
         assert "Access mode: READ-ONLY" not in out
 
     def test_unknown_access_raises(self):
@@ -376,8 +380,12 @@ class TestRenderComprehensiveRule:
                 )
             }
         )
-        assert "## Container path translation (MANDATORY)" in out
-        assert "/user_data_ro/<repo>/..." in out
+        # The path-translation directive heading (configs/assets/global.yaml)
+        # was simplified from "(MANDATORY)" to a plain section title; the
+        # mandatory translation instruction lives in the body.
+        assert "## Container path translation" in out
+        assert "Translate host paths before every MCP call." in out
+        assert "/user_data_ro/<repo>" in out
         assert "/Users/KMECHL/workspace" in out
 
     def test_per_backend_and_builtin_skills_render(self):
