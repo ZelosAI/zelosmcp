@@ -1739,6 +1739,13 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
 tokenizer = [
     { name = "tiktoken" },
 ]
@@ -1761,16 +1768,21 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.18" },
     { name = "markdown", specifier = ">=3.5" },
     { name = "mcp", specifier = ">=1.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.1.0" },
     { name = "nats-py", specifier = ">=2.14.0" },
     { name = "pyjwt", specifier = ">=2.8" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.3.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "pyyaml" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.13" },
     { name = "starlette" },
     { name = "tiktoken", marker = "extra == 'tokenizer'", specifier = ">=0.7" },
     { name = "toon-token-optimizer", specifier = ">=1.0" },
     { name = "uvicorn" },
     { name = "websockets", specifier = ">=16.0" },
 ]
-provides-extras = ["tokenizer"]
+provides-extras = ["tokenizer", "dev"]
 
 [package.metadata.requires-dev]
 dev = [

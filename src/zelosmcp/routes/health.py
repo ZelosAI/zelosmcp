@@ -4,11 +4,15 @@ Standard endpoints (zelosai/docs/architecture/07-container-contract.md):
 
 * ``GET /healthz`` — liveness (process is alive).
 * ``GET /readyz``  — readiness (dependencies reachable, PVC writable, ...).
-* ``GET /``        — sanity check returning name, version, status.
 
 These are aliases over the richer ``/api/status`` endpoint so the operator's
 standard probe configuration (httpGet :http /healthz, /readyz) works without
 component-specific branching.
+
+Note: ``GET /`` is deliberately *not* a health alias — that path serves the
+web dashboard UI (see ``routes/pages.py``). The k8s probes in
+``deploy/kubernetes/zelosmcp.yaml`` target ``/healthz`` and ``/readyz``, so
+the contract's sanity-probe intent is fully covered without shadowing the UI.
 """
 
 from __future__ import annotations
@@ -42,19 +46,9 @@ def make_routes(manager: "ProxyManager") -> list[Route]:
         # warmup is async and best-effort.
         return JSONResponse({"status": "ready"})
 
-    async def root(_req: Request) -> JSONResponse:
-        return JSONResponse(
-            {
-                "name": "zelosmcp",
-                "version": _read_version(),
-                "status": "ok",
-            }
-        )
-
     return [
         Route("/healthz", healthz, methods=["GET"]),
         Route("/readyz", readyz, methods=["GET"]),
-        Route("/", root, methods=["GET"]),
     ]
 
 
@@ -76,12 +70,3 @@ async def _probe_broker() -> dict[str, object] | None:
     except Exception:
         reachable = False
     return {"configured": True, "reachable": reachable, "url": url}
-
-
-def _read_version() -> str:
-    # Avoid importing zelosmcp at module-load time (it triggers heavy init).
-    try:
-        from zelosmcp import __version__  # type: ignore
-        return __version__
-    except Exception:
-        return os.environ.get("ZELOSMCP_VERSION", "0.0.0")

@@ -1144,8 +1144,16 @@ class TestCatalogEndpoint:
                 assert "description" in t
                 assert "inputSchema" in t
                 assert isinstance(t["inputSchema"], dict)
-            # Empty capabilities are coerced to []
-            assert row["prompts"] == []
+            # The built-in surfaces the seeded asset prompts from
+            # configs/assets/*.yaml (filesystem + pincher), namespaced as
+            # `<backend>__<slug>`. Assert the seeded set is exposed rather
+            # than locking an exact count (new seeds may be added).
+            prompt_names = {p["name"] for p in row["prompts"]}
+            assert {"filesystem__read-translated", "pincher__index-here"} <= prompt_names
+            for p in row["prompts"]:
+                assert "name" in p
+                assert "description" in p
+            # Resources / resource templates remain empty (none seeded).
             assert row["resources"] == []
             assert row["resourceTemplates"] == []
 

@@ -68,7 +68,10 @@ class TestRepoDetailsView:
     @pytest.mark.parametrize(
         "select_id",
         [
-            "repo-rule-format",
+            # Rule-format selection moved from a <select id="repo-rule-format">
+            # to the IDE tab bar (data-fmt buttons, see
+            # test_format_options_match_api). The remaining per-rule controls
+            # are still <select>s.
             "repo-rule-tool-use",
             "repo-rule-access",
             "repo-rule-style",
@@ -81,16 +84,20 @@ class TestRepoDetailsView:
         assert 'id="repo-rule-globs"' in HTML_TEMPLATE
 
     def test_format_options_match_api(self):
-        # The two format values must match RULE_RELATIVE_PATHS in
-        # zelosmcp.repos so the UI can't request something the backend
-        # rejects.
-        assert 'value="cursor-mdc"' in HTML_TEMPLATE
-        assert 'value="copilot-instructions"' in HTML_TEMPLATE
+        # Format selection is the IDE tab bar; the two format keys must match
+        # RULE_RELATIVE_PATHS in zelosmcp.repos so the UI can't request
+        # something the backend rejects. The tabs carry the key in data-fmt.
+        assert 'data-fmt="cursor-mdc"' in HTML_TEMPLATE
+        assert 'data-fmt="copilot-instructions"' in HTML_TEMPLATE
 
     def test_action_buttons_wired(self):
-        assert 'onclick="previewRepoRule()"' in HTML_TEMPLATE
-        assert 'onclick="saveRepoRule()"' in HTML_TEMPLATE
-        assert 'onclick="indexRepo()"' in HTML_TEMPLATE
+        # These actions are no longer wired via inline onclick= attributes;
+        # they're invoked from the JS (e.g. onRepoIdeTabClick → previewRepoRule,
+        # the save/index buttons' handlers). Assert the call sites exist so a
+        # rename still trips this smoke test.
+        assert "previewRepoRule()" in HTML_TEMPLATE
+        assert "saveRepoRule()" in HTML_TEMPLATE
+        assert "indexRepo()" in HTML_TEMPLATE
 
     def test_preview_pane_present(self):
         assert 'id="repo-rule-preview"' in HTML_TEMPLATE
@@ -138,7 +145,9 @@ class TestJsLandmarks:
         # Wired to the routes we registered in app.py.
         assert "/api/repos" in HTML_TEMPLATE
         assert "/api/repos/write-rule" in HTML_TEMPLATE
-        assert "/api/repos/index" in HTML_TEMPLATE
+        # indexRepo() drives the pincher index_project asset extension rather
+        # than a dedicated /api/repos/index route (which was never registered).
+        assert "/api/assets/extension/pincher/index_project/invoke" in HTML_TEMPLATE
         # Preview reuses the existing rule endpoint so the preview is
         # byte-identical to what saveRepoRule() will POST.
         assert "/api/cursor-rule?" in HTML_TEMPLATE
