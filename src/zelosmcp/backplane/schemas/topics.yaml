@@ -1,0 +1,36 @@
+# Zelos backplane topic catalog.
+# Each topic name follows the naming convention from
+# zelosai/docs/architecture/06-naming-conventions.md.
+
+version: v0.1.0
+
+topics:
+  - name: inference.requests.codegen
+    envelope: request
+    retention: workqueue        # one message → one consumer
+    description: Code-generation inference requests.
+
+  - name: inference.requests.analysis
+    envelope: request
+    retention: workqueue
+    description: Heavy analysis / summarization requests.
+
+  - name: inference.responses
+    envelope: response
+    retention: limits           # short-lived; consumers correlate by corrId
+    description: Reply stream; consumers filter by corrId.
+
+  - name: provisioning.events
+    envelope: event
+    retention: limits
+    description: BareMetalHost / Ansible job lifecycle events.
+
+  - name: metrics.heartbeat
+    envelope: event
+    retention: limits
+    description: Periodic heartbeats from zelosclient workers.
+
+  - name: system.schemas
+    envelope: event
+    retention: limits
+    description: Suite-internal schema-version negotiation events.

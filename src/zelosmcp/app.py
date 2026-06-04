@@ -167,6 +167,15 @@ def create_app(manager: ProxyManager | None = None):
             logging.getLogger("zelosmcp").error(
                 "builtin failed to start: %s", exc, exc_info=True
             )
+        # Bring up the always-on data-path MCP (/zelos/mcp): sync subagents
+        # (#24) + async task (#25). Non-fatal on failure — its tools become
+        # unreachable but the rest of zelosmcp still serves.
+        try:
+            await manager.start_datapath()
+        except Exception as exc:
+            logging.getLogger("zelosmcp").error(
+                "data-path server failed to start: %s", exc, exc_info=True
+            )
         # Bring up the reverse-proxy httpx client so the dispatcher can
         # forward requests as soon as the first backend with a configured
         # reverseProxy starts.
@@ -197,6 +206,8 @@ def create_app(manager: ProxyManager | None = None):
         try:
             yield
         finally:
+            with contextlib.suppress(Exception):
+                await manager.stop_datapath()
             with contextlib.suppress(Exception):
                 await manager.stop_builtin()
             with contextlib.suppress(Exception):
@@ -385,6 +396,18 @@ def create_app(manager: ProxyManager | None = None):
                                 auth_value = None
                             break
                     auth_token = inbound_authorization.set(auth_value)
+                    # Bind the gateway-propagated caller identity
+                    # (X-Zelos-Subject / X-Zelos-Scopes) so the data-path
+                    # tools (#24, #25) can mint per-invocation downstream
+                    # bearer tokens (#26) for the right subject. Anonymous
+                    # when the headers are absent (direct dev call).
+                    from zelosmcp.auth.identity import (
+                        current_identity,
+                        identity_from_scope_headers,
+                    )
+
+                    identity = identity_from_scope_headers(scope.get("headers", []))
+                    identity_token = current_identity.set(identity)
                     try:
                         # Phase 2C: the middleware around session_manager
                         # converts a PassthroughChallengeError raised
@@ -405,6 +428,7 @@ def create_app(manager: ProxyManager | None = None):
                         )
                     finally:
                         inbound_authorization.reset(auth_token)
+                        current_identity.reset(identity_token)
                 if target_label == "aggregate":
                     msg = "No MCP servers are running"
                 else:

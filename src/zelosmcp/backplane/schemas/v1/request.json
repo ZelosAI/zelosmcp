@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zelos.ai/schemas/envelopes/v1/request.json",
+  "title": "Zelos backplane request envelope (v1)",
+  "type": "object",
+  "required": ["id", "ts", "source", "kind", "payload"],
+  "properties": {
+    "id":      { "type": "string", "format": "uuid", "description": "Globally unique message id." },
+    "ts":      { "type": "string", "format": "date-time", "description": "Emit time (RFC 3339)." },
+    "source":  { "type": "string", "description": "Component name that emitted." },
+    "kind":    { "type": "string", "description": "Request kind, matching the topic suffix (e.g. codegen)." },
+    "traceId": { "type": "string", "description": "Distributed trace id, propagated across hops." },
+    "replyTo": { "type": "string", "description": "Topic the consumer should publish the response onto." },
+    "payload": { "type": "object", "description": "Kind-specific request body." }
+  },
+  "additionalProperties": false
+}

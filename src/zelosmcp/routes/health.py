@@ -26,7 +26,16 @@ if TYPE_CHECKING:  # pragma: no cover
 
 def make_routes(manager: "ProxyManager") -> list[Route]:
     async def healthz(_req: Request) -> JSONResponse:
-        return JSONResponse({"status": "ok"})
+        payload: dict[str, object] = {"status": "ok"}
+        # Surface broker reachability when ZELOS_BROKER_URL is configured
+        # (issue #23 verification). Best-effort: a probe failure marks the
+        # broker unreachable but never fails liveness — zelosmcp is alive
+        # even if the broker is down. Skipped entirely when unconfigured so
+        # deployments without the data path see no extra latency.
+        broker = await _probe_broker()
+        if broker is not None:
+            payload["broker"] = broker
+        return JSONResponse(payload)
 
     async def readyz(_req: Request) -> JSONResponse:
         # Ready as soon as the ProxyManager is initialized; passthrough pool
@@ -47,6 +56,26 @@ def make_routes(manager: "ProxyManager") -> list[Route]:
         Route("/readyz", readyz, methods=["GET"]),
         Route("/", root, methods=["GET"]),
     ]
+
+
+async def _probe_broker() -> dict[str, object] | None:
+    """Probe broker reachability when ``ZELOS_BROKER_URL`` is set.
+
+    Returns ``{"configured": bool, "reachable": bool, "url": str}`` or
+    ``None`` when the broker is not configured (so ``/healthz`` stays a bare
+    ``{"status": "ok"}`` for deployments without the data path).
+    """
+    from zelosmcp.broker.client import BROKER_URL_ENV, BrokerClient
+
+    url = os.environ.get(BROKER_URL_ENV)
+    if not url:
+        return None
+    try:
+        async with BrokerClient(url) as broker:
+            reachable = await broker.healthy()
+    except Exception:
+        reachable = False
+    return {"configured": True, "reachable": reachable, "url": url}
 
 
 def _read_version() -> str:

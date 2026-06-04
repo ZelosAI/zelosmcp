@@ -524,12 +524,12 @@ class TestStartAPI:
             app, manager = _fresh()
             async with _client(app) as c:
                 await c.post("/api/start", json=_STDIO_CONFIG)
-                user = {n for n in manager.names() if n != "zelosmcp"}
+                user = {n for n in manager.names() if n not in ("zelosmcp", "zelos")}
                 assert user == {"alpha", "beta"}
                 await c.post("/api/start", json={
                     "mcpServers": {"gamma": {"command": "echo", "args": ["g"]}},
                 })
-                user = {n for n in manager.names() if n != "zelosmcp"}
+                user = {n for n in manager.names() if n not in ("zelosmcp", "zelos")}
                 assert user == {"gamma"}
             await manager.stop_all()
 
@@ -620,7 +620,7 @@ class TestStopAPI:
                 await c.post("/api/start", json=_STDIO_CONFIG)
                 r = await c.post("/api/stop")
             assert r.status_code == 200
-            user = [n for n in manager.names() if n != "zelosmcp"]
+            user = [n for n in manager.names() if n not in ("zelosmcp", "zelos")]
             assert user == []
 
 
