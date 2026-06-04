@@ -52,6 +52,7 @@ from mcp.types import (
 
 from zelosmcp.backplane.publisher import BACKPLANE_URL_ENV, BackplanePublisher
 from zelosmcp.broker.client import BROKER_URL_ENV, BrokerClient
+from zelosmcp.loader import BundleManifestError
 from zelosmcp.tools.async_task import (
     ASYNC_TASK_TOOL,
     AsyncTaskDeps,
@@ -213,6 +214,13 @@ class DataPathServer:
             )
         except McpError:
             raise
+        except BundleManifestError as exc:
+            # A malformed / dangling artifact bundle manifest (#27) is a config
+            # error, not an internal fault — surface it as INVALID_PARAMS with
+            # the readable message so the operator can fix the manifest.
+            raise McpError(
+                ErrorData(code=INVALID_PARAMS, message=str(exc))
+            ) from exc
         except Exception as exc:  # noqa: BLE001 - surface as MCP error
             raise McpError(
                 ErrorData(code=INTERNAL_ERROR, message=str(exc))
@@ -224,6 +232,7 @@ class DataPathServer:
                 "transcript": result.transcript,
                 "usage": result.usage,
                 "frames": result.frames,
+                "bundle": result.bundle,
             }
         )
 

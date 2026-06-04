@@ -38,7 +38,12 @@ from zelosmcp.broker.schema import (
     SyncChannel,
 )
 from zelosmcp.broker.sync_channel import SyncChannelClient
-from zelosmcp.loader import SubagentMeta, list_subagents
+from zelosmcp.loader import (
+    AppliedBundle,
+    SubagentMeta,
+    list_subagents,
+    load_subagent_bundle,
+)
 
 # A factory that builds an attached-capable sync-channel client for an
 # ``attach_url`` + bearer header. Injectable for tests.
@@ -47,6 +52,12 @@ ChannelFactory = Callable[[str, str | None], SyncChannelClient]
 # Optional sink invoked for each relayed frame so the MCP layer can forward
 # streaming progress to the IDE. Receives the decoded frame model.
 FrameSink = Callable[[Any], Awaitable[None]]
+
+# Loads + applies a subagent's skill/hook bundle at invoke time (#27). Returns
+# the assembled bundle, or ``None`` when the subagent has no manifest (bare
+# launch). Injectable so tests don't touch the filesystem; defaults to the
+# filesystem artifact store via :func:`zelosmcp.loader.load_subagent_bundle`.
+BundleLoader = Callable[[str], "AppliedBundle | None"]
 
 
 def _default_channel_factory(attach_url: str, auth_header: str | None) -> SyncChannelClient:
@@ -61,7 +72,8 @@ class SubagentDeps:
     the WS client (defaults to the real one). ``identity`` overrides the
     ContextVar-resolved caller (tests). ``signing_key`` overrides the env
     signing key (tests). ``frame_sink`` receives each relayed frame for
-    streaming to the IDE.
+    streaming to the IDE. ``bundle_loader`` loads the subagent's skill/hook
+    bundle at invoke time (#27); defaults to the filesystem artifact store.
     """
 
     broker: BrokerClient
@@ -69,6 +81,7 @@ class SubagentDeps:
     identity: CallerIdentity | None = None
     signing_key: str | None = None
     frame_sink: FrameSink | None = None
+    bundle_loader: BundleLoader = load_subagent_bundle
 
 
 @dataclass
@@ -77,7 +90,9 @@ class SyncSubagentResult:
 
     ``transcript`` is the consolidated turn-end message; ``frames`` is the full
     ordered list of relayed frames (as wire dicts) for the caller's
-    convenience; ``usage`` is the turn-end usage block if present.
+    convenience; ``usage`` is the turn-end usage block if present. ``bundle``
+    is the compact reference of the skill/hook bundle loaded for this
+    invocation (#27), or ``None`` when the subagent launched bare.
     """
 
     session_id: str
@@ -85,6 +100,7 @@ class SyncSubagentResult:
     transcript: Any | None = None
     usage: Any | None = None
     frames: list[dict[str, Any]] = field(default_factory=list)
+    bundle: dict[str, Any] | None = None
 
 
 def subagent_tool_specs() -> list[SubagentMeta]:
@@ -107,15 +123,23 @@ async def run_sync_subagent(
 ) -> SyncSubagentResult:
     """Drive one synchronous subagent turn over a broker sync channel.
 
-    Lifecycle: (optional) create share → open sync channel → attach WS → send
-    ``turn`` → relay frames → close channel → revoke share. Cleanup runs even
-    if the relay raises. Returns the consolidated transcript from the
-    ``turn_end`` frame.
+    Lifecycle: load skill/hook bundle (#27) → (optional) create share → open
+    sync channel (carrying the bundle reference) → attach WS → send ``turn``
+    (with skill fragments as first-turn context) → relay frames → close channel
+    → revoke share. The bundle is loaded *first* so a malformed manifest fails
+    fast before any broker resource is allocated. Cleanup runs even if the relay
+    raises. Returns the consolidated transcript from the ``turn_end`` frame.
     """
     identity = deps.identity if deps.identity is not None else auth_mw.resolve_identity()
     auth_header = "Bearer " + auth_mw.issue_broker_token(
         identity=identity, signing_key=deps.signing_key
     )
+
+    # Load + apply the subagent's skill/hook bundle (#27) before allocating any
+    # broker resource. A malformed manifest raises here (BundleManifestError) so
+    # the failure is loud and pre-flight, never mid-turn.
+    applied: AppliedBundle | None = deps.bundle_loader(subagent.name)
+    open_bundle = applied.open_payload() if applied is not None else None
 
     share = None
     channel: SyncChannel | None = None
@@ -133,23 +157,32 @@ async def run_sync_subagent(
         channel = await deps.broker.open_sync_channel(
             subagent=subagent.name,
             share=share_token,
+            bundle=open_bundle,
             auth_header=auth_header,
         )
         attach_url = deps.broker.attach_ws_url(channel)
         ws = deps.channel_factory(attach_url, auth_header)
 
         result = SyncSubagentResult(
-            session_id=channel.session_id, subagent=subagent.name
+            session_id=channel.session_id,
+            subagent=subagent.name,
+            bundle=open_bundle,
         )
         async with ws:
             # Request the turn. The broker has already staged an ``open``
             # frame; sending a ``turn`` frame carrying the prompt kicks off
-            # the subagent. ``content`` is opaque JSON the broker relays.
+            # the subagent. ``content`` is opaque JSON the broker relays. When
+            # a bundle is active its skill fragments ride along as first-turn
+            # ``context`` so the skill knowledge (incl. each skill's
+            # description) is in the subagent's context at spawn (#27).
+            content: dict[str, Any] = {"role": "user", "text": prompt}
+            if applied is not None and applied.system_prompt_fragments:
+                content["context"] = applied.system_prompt()
             await ws.send(
                 {
                     "kind": KIND_TURN,
                     "session_id": channel.session_id,
-                    "content": {"role": "user", "text": prompt},
+                    "content": content,
                 }
             )
             async for frame in ws.frames():

@@ -129,6 +129,11 @@ class OpenFrame(_FrameBase):
     kind: Literal["open"] = "open"
     subagent: str | None = None
     share: ShareMount | None = None
+    # Compact skill/hook bundle reference (#27) the broker echoes back so the
+    # subagent loads its artifacts at spawn. Opaque JSON — the loader produces
+    # it (see zelosmcp.loader.apply.AppliedBundle.open_payload) and zelosmcp
+    # does not re-interpret it on the way back.
+    bundle: Any | None = None
 
 
 class TurnFrame(_FrameBase):

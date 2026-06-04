@@ -182,13 +182,18 @@ class BrokerClient:
         target_client_id: str | None = None,
         subagent: str | None = None,
         share: str | None = None,
+        bundle: dict[str, Any] | None = None,
         auth_header: str | None = None,
     ) -> SyncChannel:
         """``POST /sync/channels`` → a :class:`SyncChannel` (201).
 
         ``share`` is the share *token* to bind to the channel (so the staged
         ``open`` frame can carry the mount coords). ``subagent`` is the
-        subagent type the channel should drive.
+        subagent type the channel should drive. ``bundle`` is the compact
+        skill/hook bundle reference (#27) the broker echoes into the staged
+        ``open`` frame's subagent payload so the subagent loads its artifacts at
+        spawn; omitted when the subagent has no bundle (fixed-roster bare
+        launch).
         """
         body: dict[str, Any] = {}
         if target_client_id is not None:
@@ -197,6 +202,8 @@ class BrokerClient:
             body["subagent"] = subagent
         if share is not None:
             body["share"] = share
+        if bundle:
+            body["bundle"] = bundle
         resp = await self._client.post(
             f"{self.base_url}/sync/channels",
             json=body,
