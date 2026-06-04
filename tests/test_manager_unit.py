@@ -100,9 +100,10 @@ class TestStartAll:
             m = ProxyManager(mandatory_config_path="")
             await m.start_all(_CONFIG)
             await m.start_all({"mcpServers": {"only": {"command": "echo"}}})
-            # `zelosmcp` is the always-on builtin; it lives alongside any
-            # user-configured backends and survives start_all/stop_all.
-            user_names = [n for n in m.names() if n != "zelosmcp"]
+            # `zelosmcp` (introspection builtin) and `zelos` (data-path
+            # server) are always-on built-ins; they live alongside any
+            # user-configured backends and survive start_all/stop_all.
+            user_names = [n for n in m.names() if n not in ("zelosmcp", "zelos")]
             assert user_names == ["only"]
             assert m.primary is None
             await m.stop_all()
@@ -240,14 +241,18 @@ class TestStatus:
     async def test_status_when_empty(self):
         m = ProxyManager(mandatory_config_path="")
         s = m.status()
-        # `zelosmcp` is the always-on builtin; until its lifespan-managed
-        # `start_builtin()` has run, `state.running` is still False, but the
-        # row exists so the UI can render the slot.
+        # `zelosmcp` (introspection builtin) and `zelos` (data-path server)
+        # are always-on built-ins; until their lifespan-managed start hooks
+        # have run, `state.running` is still False, but the rows exist so the
+        # UI can render the slots.
         assert s["primary"] is None
         assert s["running"] is False
-        assert [row["name"] for row in s["servers"]] == ["zelosmcp"]
-        assert s["servers"][0]["builtin"] is True
-        assert s["servers"][0]["running"] is False
+        by_name = {row["name"]: row for row in s["servers"]}
+        assert set(by_name) == {"zelosmcp", "zelos"}
+        assert by_name["zelosmcp"]["builtin"] is True
+        assert by_name["zelosmcp"]["running"] is False
+        assert by_name["zelos"]["builtin"] is True
+        assert by_name["zelos"]["running"] is False
 
     @pytest.mark.asyncio
     async def test_status_running(self):

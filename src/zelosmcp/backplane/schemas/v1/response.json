@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zelos.ai/schemas/envelopes/v1/response.json",
+  "title": "Zelos backplane response envelope (v1)",
+  "type": "object",
+  "required": ["id", "ts", "source", "kind", "corrId", "payload"],
+  "properties": {
+    "id":      { "type": "string", "format": "uuid", "description": "Globally unique message id." },
+    "ts":      { "type": "string", "format": "date-time" },
+    "source":  { "type": "string" },
+    "kind":    { "type": "string" },
+    "traceId": { "type": "string" },
+    "corrId":  { "type": "string", "description": "Correlates back to the originating request envelope's `id`." },
+    "ok":      { "type": "boolean", "description": "True if the payload is a successful result; false if `payload.error` describes a failure." },
+    "payload": { "type": "object" }
+  },
+  "additionalProperties": false
+}

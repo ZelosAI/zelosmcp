@@ -28,6 +28,9 @@ RESERVED_NAMES: frozenset[str] = frozenset({
     # `zelosmcp` is the always-on built-in backend (BuiltinServer in
     # zelosmcp.builtin); reserved so user configs can't shadow it.
     "zelosmcp",
+    # `zelos` is the always-on data-path backend (DataPathServer in
+    # zelosmcp.server) mounted at /zelos/mcp; reserved likewise.
+    "zelos",
 })
 
 # Path prefixes a backend's reverseProxy.mount cannot claim. These either

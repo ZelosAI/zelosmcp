@@ -27,6 +27,7 @@ from zelosmcp.auth import (
     build_provider,
 )
 from zelosmcp.builtin import NAME as BUILTIN_NAME, BuiltinServer
+from zelosmcp.server import NAME as DATAPATH_NAME, DataPathServer
 from zelosmcp.config import (
     AuthProviderSpec,
     ConfigError,
@@ -137,6 +138,14 @@ class ProxyManager:
         # `_attach_log_pump` requires a running event loop.
         self.builtin = BuiltinServer(self)
         self.servers[BUILTIN_NAME] = self.builtin
+        # The data-path MCP server (v0.3: sync subagents + async task) is
+        # ProxyState-shaped and pre-seeded under the reserved key "zelos" so
+        # the dispatcher can route /zelos/mcp. It deliberately exposes no
+        # client_session, so the /mcp aggregator and /api/catalog skip it —
+        # its tools are invoked directly at /zelos/mcp. Started/stopped via
+        # start_datapath()/stop_datapath() from the lifespan hook.
+        self.datapath = DataPathServer(self)
+        self.servers[DATAPATH_NAME] = self.datapath
         # Shared HTTP client used by the reverse-proxy dispatcher to forward
         # requests to backend HTTP sidecars. Lifecycle is owned by app.py's
         # lifespan hook (start_http_client / stop_http_client) so connection
@@ -561,12 +570,13 @@ class ProxyManager:
         :meth:`start_all` so inbound ``/mcp`` requests never see a 503
         window while backends are being recycled.
 
-        The always-on builtin (`zelosmcp`) is preserved unchanged.
+        The always-on builtin (`zelosmcp`) and data-path (`zelos`) servers
+        are preserved unchanged.
         """
         to_stop = [
             (name, state)
             for name, state in self.servers.items()
-            if name != BUILTIN_NAME
+            if name not in (BUILTIN_NAME, DATAPATH_NAME)
         ]
         if to_stop:
             await asyncio.gather(
@@ -596,9 +606,9 @@ class ProxyManager:
         self._primary = None
 
     async def start_one(self, name: str) -> None:
-        if name == BUILTIN_NAME:
+        if name in (BUILTIN_NAME, DATAPATH_NAME):
             raise KeyError(
-                f"'{BUILTIN_NAME}' is the always-on builtin and cannot be "
+                f"'{name}' is an always-on built-in backend and cannot be "
                 "started/stopped"
             )
         spec = self._specs.get(name)
@@ -618,9 +628,9 @@ class ProxyManager:
         await self._start_one_spec(state, spec)
 
     async def stop_one(self, name: str) -> None:
-        if name == BUILTIN_NAME:
+        if name in (BUILTIN_NAME, DATAPATH_NAME):
             raise KeyError(
-                f"'{BUILTIN_NAME}' is the always-on builtin and cannot be "
+                f"'{name}' is an always-on built-in backend and cannot be "
                 "started/stopped"
             )
         state = self.servers.get(name)
@@ -657,6 +667,27 @@ class ProxyManager:
         if task is not None:
             task.cancel()
         await self.builtin.stop()
+
+    async def start_datapath(self) -> None:
+        """Bring up the always-on data-path MCP server (/zelos/mcp).
+
+        Called once from the Starlette lifespan startup hook. Idempotent. The
+        data-path server is intentionally NOT wired into the aggregator (it
+        has no client_session), so unlike start_builtin this does not touch
+        the aggregator.
+        """
+        if self.datapath.running:
+            return
+        await self.datapath.start()
+        if DATAPATH_NAME not in self._log_pumps:
+            self._attach_log_pump(self.datapath)
+
+    async def stop_datapath(self) -> None:
+        """Tear down the data-path server. Called from the lifespan shutdown."""
+        task = self._log_pumps.pop(DATAPATH_NAME, None)
+        if task is not None:
+            task.cancel()
+        await self.datapath.stop()
 
     async def start_http_client(self) -> None:
         """Initialise the shared httpx.AsyncClient used by the reverse-proxy
@@ -1511,8 +1542,10 @@ class ProxyManager:
                 "error": state.error,
                 "primary": name == self._primary,
                 # `builtin: true` lets the UI render the always-on row
-                # differently (no Stop button, etc.).
-                "builtin": name == BUILTIN_NAME,
+                # differently (no Stop button, etc.). Both the introspection
+                # builtin (`zelosmcp`) and the data-path server (`zelos`) are
+                # always-on built-ins.
+                "builtin": name in (BUILTIN_NAME, DATAPATH_NAME),
             }
             if spec is not None:
                 entry["transport"] = spec.transport
@@ -1556,7 +1589,9 @@ class ProxyManager:
             "primary": self._primary,
             "servers": servers,
             "running": any(
-                s.running for n, s in self.servers.items() if n != BUILTIN_NAME
+                s.running
+                for n, s in self.servers.items()
+                if n not in (BUILTIN_NAME, DATAPATH_NAME)
             ),
         }
         # Surface the active BuiltinConfig so config-round-trip tooling
