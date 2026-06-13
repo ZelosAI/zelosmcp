@@ -16,7 +16,7 @@ build:
       platforms: [amd64]
 
 test:
-  unit: 'pip install -q -e . pytest && PYTHONPATH=src pytest tests/ -q --junitxml="$ZELOS_TEST_RESULTS_DIR/junit.xml"'
+  unit: 'pip install -q -e ".[dev]" && PYTHONPATH=src pytest -q --junitxml="$ZELOS_TEST_RESULTS_DIR/junit.xml"'
   image: python:3.12-slim
 
 deliver:
