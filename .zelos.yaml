@@ -1,0 +1,26 @@
+# The buildable-repo contract (zelosai docs/architecture/20-buildable-repo-contract.md,
+# schema v1). Part of the v0.4.9 generic-pipeline migration (zelos.foundry#300).
+#
+# NOTE: lint (ruff/mypy) moves to repo-side GitHub Actions per the doc-20 boundary —
+# foundry posts foundry/test + foundry/build, no longer foundry/lint. The test.unit
+# command installs the package + pytest in the toolchain image and emits JUnit for the
+# foundry Allure report; adjust the install if this repo's deps differ.
+schema: v1
+name: zelosmcp
+
+build:
+  images:
+    - name: zelosmcp
+      context: .
+      dockerfile: Dockerfile
+      platforms: [amd64]
+
+test:
+  unit: 'pip install -q -e . pytest && PYTHONPATH=src pytest tests/ -q --junitxml="$ZELOS_TEST_RESULTS_DIR/junit.xml"'
+  image: python:3.12-slim
+
+deliver:
+  registry_project: zelos
+  versioning: develop-floating
+  ghcr:
+    namespace: zelosai
