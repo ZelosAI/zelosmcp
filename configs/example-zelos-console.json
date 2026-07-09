@@ -1,0 +1,23 @@
+{
+  "_doc": [
+    "Front the Zelos operator console's MCP endpoint (/api/mcp) through zelosMCP.",
+    "",
+    "The console (zelosctl web) co-serves an MCP server at /api/mcp: one tool per verb",
+    "of every installed zelos.* collection (proxmox__host_prep, kubernetes__platform,",
+    "foundry__environment, ...) plus zelos__* job/docs tools and zelos:// resources.",
+    "It authenticates exactly like the console REST API:",
+    "  - local-token mode: Authorization: Bearer <ZELOS_WEB_TOKEN> (printed at startup)",
+    "  - oidc-proxy mode (in-cluster): the oauth2-proxy/Dex identity headers (put zelosMCP",
+    "    behind the same gate, or use passthrough).",
+    "",
+    "The backend name 'zelos' becomes the tool prefix Cursor sees: zelos__proxmox__host_prep.",
+    "Load with:  make load ZELOSMCP_CONFIG=configs/example-zelos-console.json"
+  ],
+  "mcpServers": {
+    "zelos": {
+      "type": "streamable-http",
+      "url": "https://console.<bed>.<product>.<domain>/api/mcp",
+      "headers": { "Authorization": "Bearer $ZELOS_WEB_TOKEN" }
+    }
+  }
+}
