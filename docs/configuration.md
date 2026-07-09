@@ -97,6 +97,31 @@ For a remote MCP server speaking the streamable-HTTP transport (the same transpo
 | `url` | yes | string | Full URL of the MCP endpoint. |
 | `headers` | no | object of strings | Sent on every request. |
 
+#### Zelos operator console (`/api/mcp`)
+
+The Zelos operator console (`zelosctl web`) co-serves an MCP endpoint at **`/api/mcp`** — one tool
+per verb of every installed `zelos.*` collection (`proxmox__host_prep`, `kubernetes__platform`,
+`foundry__environment`, …) plus `zelos__*` job/docs tools and `zelos://` resources. It's a
+`streamable-http` backend that authenticates like the console's REST API (a `Bearer` token in
+`local-token` mode, or the oauth2-proxy/Dex identity headers in `oidc-proxy` mode — put zelosMCP
+behind the same gate). Front it with:
+
+```json
+{
+  "mcpServers": {
+    "zelos": {
+      "type": "streamable-http",
+      "url": "https://console.<bed>.<product>.<domain>/api/mcp",
+      "headers": { "Authorization": "Bearer $ZELOS_WEB_TOKEN" }
+    }
+  }
+}
+```
+
+Ready-to-load example: [`configs/example-zelos-console.json`](../configs/example-zelos-console.json)
+(`make load ZELOSMCP_CONFIG=configs/example-zelos-console.json`). The backend name (`zelos`) is the
+tool prefix Cursor sees — `zelos__proxmox__host_prep`.
+
 ### OAuth passthrough (`passthrough`)
 
 Some remote MCP servers — GitHub MCP at `api.githubcopilot.com/mcp`, Atlassian's hosted MCP, etc. — require **OAuth** rather than a static token. With `"passthrough": true`, zelosMCP forwards traffic transparently and lets the MCP client (Cursor) perform the OAuth dance directly with the upstream issuer. zelosMCP holds **no** OAuth state of its own; tokens flow through unchanged.
